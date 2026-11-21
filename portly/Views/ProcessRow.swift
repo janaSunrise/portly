@@ -23,8 +23,14 @@ struct ProcessRow: View {
             }
         }
         .padding(.vertical, 2)
-        .badge(Text(process.portNumbers.map(String.init).joined(separator: ", ")).monospacedDigit())
+        .badge(ports)
         .help(process.arguments.joined(separator: " "))
+    }
+
+    private var ports: Text {
+        let numbers = process.portNumbers.map(String.init).joined(separator: ", ")
+        guard process.isExposed else { return Text(numbers).monospacedDigit() }
+        return Text("\(Image(systemName: "network")) \(numbers)").monospacedDigit()
     }
 
     // ask by type, not by file: Finder thinks a binary named "2.1.330" is a document

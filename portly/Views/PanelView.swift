@@ -4,6 +4,7 @@ struct PanelView: View {
     let store: PortStore
 
     @State private var selection: PortProcess.ID?
+    @State private var query = ""
     @State private var confirmingKill: (process: PortProcess, force: Bool)?
     @State private var failure: (process: PortProcess, error: Error)?
 
@@ -13,6 +14,17 @@ struct PanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            VStack(spacing: 10) {
+                PanelHeader(projectCount: listed.count { $0.kind == .project }, portCount: portCount)
+                SearchField(text: $query, prompt: "Port, name or folder")
+            }
+            .padding([.horizontal, .top], 12)
+            .padding(.bottom, 6)
+            .background {
+                LinearGradient(colors: [.accent.opacity(0.12), .clear], startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea()
+            }
+
             if listed.isEmpty {
                 ContentUnavailableView(
                     "Nothing's listening",
@@ -20,23 +32,31 @@ struct PanelView: View {
                     description: Text("Start a server and it'll show up here.")
                 )
                 .frame(maxHeight: .infinity)
+            } else if results.isEmpty {
+                ContentUnavailableView.search(text: query)
+                    .frame(maxHeight: .infinity)
             } else {
-                let groups = Dictionary(grouping: listed, by: \.kind)
+                let groups = Dictionary(grouping: results, by: \.kind)
 
                 List(selection: $selection) {
                     if let projects = groups[.project] {
-                        Section("Projects") { rows(projects) }
+                        Section { rows(projects) } header: { header("Projects", count: projects.count) }
                     }
                     if let apps = groups[.app] {
-                        Section("Apps") { rows(apps) }
+                        Section { rows(apps) } header: { header("Apps", count: apps.count) }
                     }
                     if let services = groups[.service] {
-                        Section("Services", isExpanded: $showServices) { rows(services) }
+                        // searching opens it, otherwise it's up to you
+                        Section(isExpanded: Binding { showServices || !query.isEmpty } set: { showServices = $0 }) {
+                            rows(services)
+                        } header: {
+                            header("Services", count: services.count)
+                        }
                     }
                 }
                 .listStyle(.sidebar)
                 .scrollContentBackground(.hidden)
-                .animation(.default, value: listed.map(\.id))
+                .animation(.default, value: results.map(\.id))
                 .contextMenu(forSelectionType: PortProcess.ID.self) { ids in
                     if let process = process(ids) {
                         ProcessMenu(process: process) { force in requestKill(process, force: force) }
@@ -56,19 +76,6 @@ struct PanelView: View {
                 }
             }
 
-            Divider()
-
-            HStack {
-                Text("^[\(listed.count) process](inflect: true) · ^[\(portCount) port](inflect: true)")
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Quit") { NSApp.terminate(nil) }
-                    .buttonStyle(.borderless)
-                    .keyboardShortcut("q")
-            }
-            .font(.callout)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
         }
         .frame(width: 360, height: 440)
         .task { await store.watch() }
@@ -98,8 +105,17 @@ struct PanelView: View {
         store.processes.filter { $0.kind != .system }
     }
 
+    private var results: [PortProcess] {
+        let query = query.trimmingCharacters(in: .whitespaces)
+        return query.isEmpty ? listed : listed.filter { $0.matches(query) }
+    }
+
     private var portCount: Int {
         listed.reduce(0) { $0 + $1.portNumbers.count }
+    }
+
+    private func header(_ title: LocalizedStringKey, count: Int) -> some View {
+        Text("\(Text(title)) \(Text("\(count)").foregroundStyle(.tertiary))")
     }
 
     // scanner already sorts by port, grouping keeps that order

@@ -3,6 +3,10 @@ import Foundation
 nonisolated struct ListeningPort: Hashable, Sendable {
     let port: UInt16
     let address: String
+
+    var isLoopback: Bool {
+        address == "::1" || address.hasPrefix("127.")
+    }
 }
 
 nonisolated struct PortProcess: Identifiable, Hashable, Sendable {
@@ -56,7 +60,21 @@ extension PortProcess {
         appName ?? projectName ?? name
     }
 
+    // bound to 0.0.0.0 or ::, so anyone on your network can reach it
+    var isExposed: Bool {
+        ports.contains { !$0.isLoopback }
+    }
+
     func url(for port: UInt16) -> URL {
         URL(string: "http://localhost:\(port)")!
+    }
+
+    // "30" finds 3000 and 3001, anything else matches name or folder
+    func matches(_ query: String) -> Bool {
+        let digits = query.trimmingPrefix(":")
+        if !digits.isEmpty, digits.allSatisfy(\.isNumber) {
+            return portNumbers.contains { String($0).hasPrefix(digits) }
+        }
+        return [displayName, name, cwd ?? ""].contains { $0.localizedStandardContains(query) }
     }
 }

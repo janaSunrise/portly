@@ -21,7 +21,7 @@ nonisolated struct PortProcess: Identifiable, Hashable, Sendable {
     var id: pid_t { pid }
 }
 
-extension PortProcess {
+nonisolated extension PortProcess {
     // 3000 on IPv4 and IPv6 is still just 3000
     var portNumbers: [UInt16] {
         Set(ports.map(\.port)).sorted()
@@ -60,6 +60,21 @@ extension PortProcess {
         appName ?? projectName ?? name
     }
 
+    // what was actually run: "next-server (v16.4.6)", "vite --port 5173", "uvicorn app:app"
+    var command: String {
+        guard let first = arguments.first else { return name }
+        // servers that retitle themselves say more in the title than the binary does
+        if first.contains(" "), !FileManager.default.fileExists(atPath: first) { return first }
+
+        let isPath = { (arg: String) in arg.contains("/") && !arg.hasPrefix("-") }
+        var words = arguments.map { isPath($0) ? ($0 as NSString).lastPathComponent : $0 }
+        // `node path/to/vite` or `python -m uvicorn`: the tool matters, not the interpreter
+        if arguments.count > 1, isPath(arguments[1]) || arguments[1] == "-m" {
+            words.removeFirst(arguments[1] == "-m" ? 2 : 1)
+        }
+        return words.joined(separator: " ")
+    }
+
     // bound to 0.0.0.0 or ::, so anyone on your network can reach it
     var isExposed: Bool {
         ports.contains { !$0.isLoopback }
@@ -76,5 +91,51 @@ extension PortProcess {
             return portNumbers.contains { String($0).hasPrefix(digits) }
         }
         return [displayName, name, cwd ?? ""].contains { $0.localizedStandardContains(query) }
+    }
+}
+
+// one row in the list: a single process, or all the helpers of one app
+nonisolated struct PortGroup: Identifiable, Hashable, Sendable {
+    var processes: [PortProcess]
+
+    var lead: PortProcess { processes[0] }
+    var id: String { kind == .app ? lead.appPath ?? "\(lead.pid)" : "\(lead.pid)" }
+    var kind: PortProcess.Kind { lead.kind }
+    var displayName: String { lead.displayName }
+
+    var portNumbers: [UInt16] {
+        Set(processes.flatMap(\.portNumbers)).sorted()
+    }
+
+    var isExposed: Bool {
+        processes.contains(where: \.isExposed)
+    }
+
+    var startedAt: Date? {
+        processes.compactMap(\.startedAt).min()
+    }
+
+    func matches(_ query: String) -> Bool {
+        processes.contains { $0.matches(query) }
+    }
+}
+
+extension [PortProcess] {
+    // VS Code runs a few helpers, each on its own port. one row is plenty
+    var grouped: [PortGroup] {
+        var groups: [PortGroup] = []
+        var appIndex: [String: Int] = [:]
+
+        for process in self {
+            if process.kind == .app, let app = process.appPath {
+                if let index = appIndex[app] {
+                    groups[index].processes.append(process)
+                    continue
+                }
+                appIndex[app] = groups.count
+            }
+            groups.append(PortGroup(processes: [process]))
+        }
+        return groups
     }
 }

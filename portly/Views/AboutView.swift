@@ -29,11 +29,6 @@ struct AboutView: View {
         .padding(.horizontal, 32)
         .padding(.vertical, 24)
         .frame(width: 320)
-        .background(alignment: .top) {
-            LinearGradient(colors: [.accent.opacity(0.12), .clear], startPoint: .top, endPoint: .bottom)
-                .frame(height: 180)
-                .ignoresSafeArea()
-        }
     }
 
     private func info(_ key: String) -> String {

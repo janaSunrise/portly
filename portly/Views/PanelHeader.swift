@@ -5,13 +5,12 @@ struct PanelHeader: View {
     let projectCount: Int
     let portCount: Int
 
+    @AppStorage("showApps") private var showApps = false
     @AppStorage("showServices") private var showServices = false
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        HStack(spacing: 10) {
-            AppMark()
-
+        HStack {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Portly")
                     .font(.headline)
@@ -26,6 +25,7 @@ struct PanelHeader: View {
 
             Menu {
                 Toggle("Launch at Login", isOn: launchAtLogin)
+                Toggle("Show Apps", isOn: $showApps)
                 Toggle("Show Services", isOn: $showServices)
                 Divider()
                 Button("About Portly") {

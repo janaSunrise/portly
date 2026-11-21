@@ -1,35 +1,44 @@
 import SwiftUI
 
 struct ProcessMenu: View {
-    let process: PortProcess
-    let kill: (_ force: Bool) -> Void
+    let group: PortGroup
+    let stop: (_ force: Bool) -> Void
 
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        ForEach(process.portNumbers, id: \.self) { port in
-            Button("Open localhost:\(String(port))") { openURL(process.url(for: port)) }
+        ForEach(group.portNumbers, id: \.self) { port in
+            Button("Open localhost:\(String(port))") { openURL(group.lead.url(for: port)) }
         }
-        if let port = process.portNumbers.first {
-            Button("Copy URL") { copy(process.url(for: port).absoluteString) }
+        if let port = group.portNumbers.first {
+            Button("Copy URL") { copy(group.lead.url(for: port).absoluteString) }
         }
 
         Divider()
 
-        if let cwd = process.cwd, cwd != "/" {
-            Button("Reveal in Finder") {
-                NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: cwd)])
+        if let folder {
+            Button("Show in Finder") {
+                NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: folder)])
             }
         }
-        if !process.arguments.isEmpty {
-            Button("Copy Command") { copy(process.arguments.joined(separator: " ")) }
+        if group.processes.count == 1 {
+            if !group.lead.arguments.isEmpty {
+                Button("Copy Command") { copy(group.lead.arguments.joined(separator: " ")) }
+            }
+            Button("Copy PID") { copy(String(group.lead.pid)) }
         }
-        Button("Copy PID") { copy(String(process.pid)) }
 
         Divider()
 
-        Button("Kill", role: .destructive) { kill(false) }
-        Button("Force Kill", role: .destructive) { kill(true) }
+        Button(group.kind == .app ? "Quit" : "Kill", role: .destructive) { stop(false) }
+        Button(group.kind == .app ? "Force Quit" : "Force Kill", role: .destructive) { stop(true) }
+    }
+
+    // the app itself for apps, the project folder for everything else
+    private var folder: String? {
+        if group.kind == .app { return group.lead.appPath }
+        guard let cwd = group.lead.cwd, cwd != "/" else { return nil }
+        return cwd
     }
 
     private func copy(_ string: String) {

@@ -9,9 +9,12 @@ final class PortStore {
     }
 
     func refresh() async {
-        processes = await Task.detached(priority: .userInitiated) {
+        let latest = await Task.detached(priority: .userInitiated) {
             PortScanner.scan()
         }.value
+
+        // skip no-op updates so the UI doesn't redraw every tick
+        if latest != processes { processes = latest }
     }
 
     private func watch() async {

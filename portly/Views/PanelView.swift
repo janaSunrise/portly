@@ -38,6 +38,7 @@ struct PanelView: View {
             .padding(.vertical, 8)
         }
         .frame(width: 360, height: 440)
+        .task { await store.watch() }
     }
 
     private var portCount: Int {

@@ -1,51 +1,55 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ProcessRow: View {
     let process: PortProcess
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: process.appPath ?? process.path ?? "/bin/sh"))
+            Image(nsImage: icon)
                 .resizable()
-                .frame(width: 26, height: 26)
+                .frame(width: 28, height: 28)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
                     .lineLimit(1)
-                Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-
-            Spacer(minLength: 8)
-
-            HStack(spacing: 4) {
-                ForEach(process.portNumbers, id: \.self) { port in
-                    Text(verbatim: String(port)) // verbatim, or 3000 turns into "3,000"
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.quaternary, in: Capsule())
+                TimelineView(.everyMinute) { context in
+                    Text(subtitle(now: context.date))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.vertical, 2)
+        .badge(Text(process.portNumbers.map(String.init).joined(separator: ", ")).monospacedDigit())
+        .help(process.arguments.joined(separator: " "))
+    }
+
+    // ask by type, not by file: Finder thinks a binary named "2.1.330" is a document
+    private var icon: NSImage {
+        if let app = process.appPath { return NSWorkspace.shared.icon(forFile: app) }
+        return NSWorkspace.shared.icon(for: .unixExecutable)
     }
 
     private var title: String {
         process.appName ?? process.projectName ?? process.name
     }
 
-    private var subtitle: String {
+    // "node · ~/dev/portfolio · 16m", or just "up 3d" when there's nothing else to say
+    private func subtitle(now: Date) -> String {
         var parts: [String] = []
-        if process.name != title { parts.append(process.name) }
+        // skip "ControlCenter" under "Control Center"
+        if process.name != title.replacingOccurrences(of: " ", with: "") { parts.append(process.name) }
         if process.projectName == title, let cwd = process.cwd {
             parts.append((cwd as NSString).abbreviatingWithTildeInPath)
         }
-        return parts.isEmpty ? "PID \(process.pid)" : parts.joined(separator: " · ")
+        guard let started = process.startedAt else {
+            return parts.isEmpty ? "PID \(process.pid)" : parts.joined(separator: " · ")
+        }
+        let uptime = Duration.seconds(now.timeIntervalSince(started))
+            .formatted(.units(allowed: [.days, .hours, .minutes, .seconds], width: .narrow, maximumUnitCount: 1))
+        return parts.isEmpty ? "up \(uptime)" : (parts + [uptime]).joined(separator: " · ")
     }
 }

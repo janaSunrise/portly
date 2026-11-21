@@ -14,7 +14,7 @@ nonisolated enum PortScanner {
 
         let path = executablePath(of: pid)
         let arguments = arguments(of: pid)
-        // argv[0] reads nicer than the binary (x lives at …/versions/2.1.0),
+        // argv[0] reads nicer than the binary, some CLIs live at …/versions/2.1.0
         // unless the process rewrote it into a title like `redis-server 127.0.0.1:6379`
         let command = arguments.first.flatMap { arg in
             !arg.contains(" ") || FileManager.default.fileExists(atPath: arg) ? arg : nil

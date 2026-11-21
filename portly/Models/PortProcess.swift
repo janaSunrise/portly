@@ -37,4 +37,26 @@ extension PortProcess {
         guard let cwd, cwd.hasPrefix(NSHomeDirectory() + "/"), !cwd.contains("/.") else { return nil }
         return (cwd as NSString).lastPathComponent
     }
+
+    enum Kind {
+        case project, service, app, system
+    }
+
+    // first match wins: Control Center is an app, but it's macOS's app
+    var kind: Kind {
+        if projectName != nil { return .project }
+        if let path, ["/System/", "/usr/libexec/", "/usr/sbin/", "/usr/bin/"].contains(where: path.hasPrefix) {
+            return .system
+        }
+        if appPath != nil { return .app }
+        return .service
+    }
+
+    var displayName: String {
+        appName ?? projectName ?? name
+    }
+
+    func url(for port: UInt16) -> URL {
+        URL(string: "http://localhost:\(port)")!
+    }
 }
